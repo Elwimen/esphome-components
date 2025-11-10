@@ -1,0 +1,108 @@
+esphome:
+  name: "fdx-tag-reader"
+  friendly_name: FDX-B Tag Reader
+
+esp32:
+  board: seeed_xiao_esp32c6
+  variant: esp32c6
+  framework:
+    type: esp-idf
+
+# Enable logging
+logger:
+  level: DEBUG
+  baud_rate: 115200
+
+# Enable Home Assistant API
+api:
+  id: api_server
+  encryption:
+    key: !secret fdx_reader_api_key
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret iot_ssid
+  password: !secret iot_password
+
+  ap:
+    ssid: "[EHAP] Tag Reader"
+    password: !secret device_password
+
+captive_portal:
+
+web_server:
+  port: 80
+  version: 3
+  local: true
+
+# Time component for timestamps
+time:
+  - platform: homeassistant
+    id: homeassistant_time
+
+# UART configuration for FDX-B tag reader on GPIO17 (D7)
+uart:
+  id: tag_reader_uart
+  rx_pin: GPIO17
+  baud_rate: 9600
+  data_bits: 8
+  parity: NONE
+  stop_bits: 1
+
+# External custom component for FDX-B reader
+external_components:
+  - source:
+      type: local
+      path: custom_components
+
+# FDX-B Reader Component
+fdx_reader:
+  id: fdx_tag_reader
+  uart_id: tag_reader_uart
+  time_id: homeassistant_time
+
+text_sensor:
+  - platform: fdx_reader
+    fdx_reader_id: fdx_tag_reader
+    last_tag:
+      name: "Last Tag ID"
+      icon: mdi:card-account-details
+    last_scan_time:
+      name: "Last Scan Time"
+      icon: mdi:clock-outline
+    known_tags:
+      name: "Known Tags"
+      icon: mdi:format-list-bulleted
+
+# Additional sensors
+sensor:
+  - platform: fdx_reader
+    fdx_reader_id: fdx_tag_reader
+    total_scans:
+      name: "Total Scans"
+      icon: mdi:counter
+
+  - platform: uptime
+    name: "Uptime"
+    type: timestamp
+
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+
+binary_sensor:
+  - platform: fdx_reader
+    fdx_reader_id: fdx_tag_reader
+    tag_detected:
+      name: "Tag Detected"
+      device_class: presence
+      icon: mdi:nfc-tap
+
+  - platform: status
+    name: "Connection Status"
+
+button:
+  - platform: restart
+    name: "Restart"
