@@ -1,0 +1,6 @@
+[submodule "custom_components/fdx_reader"]
+	path = custom_components/fdx_reader
+	url = https://github.com/Elwimen/esphome-fdx-reader.git
+[submodule "custom_components/radiacode_ble"]
+	path = custom_components/radiacode_ble
+	url = https://github.com/Elwimen/esphome-radiacode-ble.git
