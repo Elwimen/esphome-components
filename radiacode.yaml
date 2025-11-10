@@ -35,6 +35,7 @@ ota:
   - platform: esphome
 
 wifi:
+  id: wifi_component
   ssid: !secret iot_ssid
   password: !secret iot_password
   fast_connect: true
@@ -180,6 +181,18 @@ image:
     id: bluetooth_on_icon
     resize: 36x36
     type: BINARY
+  - file: mdi:access-point
+    id: access_point_icon
+    resize: 36x36
+    type: BINARY
+  - file: mdi:wifi
+    id: wifi_icon
+    resize: 36x36
+    type: BINARY
+  - file: mdi:wifi-strength-outline
+    id: wifi_strength_icon
+    resize: 36x36
+    type: BINARY
 
 # OLED Display (72x40, SH1106)
 display:
@@ -191,10 +204,22 @@ display:
       // SH1106 with 72x40 display, screen starts at (30, 12)
       it.fill(COLOR_OFF);
 
+      bool blink_state = (millis() / 1000) % 2 == 0;
+
+      // Check WiFi status - blink until connected
+      if (!id(wifi_component).is_connected()) {
+        // Blink between wifi icons until connected
+        if (blink_state) {
+          it.image(48, 26, id(wifi_icon));
+        } else {
+          it.image(48, 26, id(wifi_strength_icon));
+        }
+        return;
+      }
+
       // Show Bluetooth disconnected icon if device is disconnected
       if (id(radiacode_ble_client)->state() != esphome::esp32_ble_tracker::ClientState::ESTABLISHED) {
         // Blink between bluetooth and bluetooth-connect every second
-        bool blink_state = (millis() / 1000) % 2 == 0;
         if (blink_state) {
           it.image(48, 26, id(bluetooth_connect_icon));
         } else {
