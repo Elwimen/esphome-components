@@ -163,9 +163,23 @@ font:
   - file: "gfonts://Roboto"
     id: font_small
     size: 8
+  - file: "gfonts://Roboto@700"
+    id: font_medium_bold
+    size: 12
   - file: "gfonts://Roboto"
     id: font_medium
     size: 12
+
+# Images
+image:
+  - file: mdi:bluetooth-connect
+    id: bluetooth_connect_icon
+    resize: 36x36
+    type: BINARY
+  - file: mdi:bluetooth
+    id: bluetooth_on_icon
+    resize: 36x36
+    type: BINARY
 
 # OLED Display (72x40, SH1106)
 display:
@@ -177,24 +191,43 @@ display:
       // SH1106 with 72x40 display, screen starts at (30, 12)
       it.fill(COLOR_OFF);
 
+      // Show Bluetooth disconnected icon if device is disconnected
+      if (id(radiacode_ble_client)->state() != esphome::esp32_ble_tracker::ClientState::ESTABLISHED) {
+        // Blink between bluetooth and bluetooth-connect every second
+        bool blink_state = (millis() / 1000) % 2 == 0;
+        if (blink_state) {
+          it.image(48, 26, id(bluetooth_connect_icon));
+        } else {
+          it.image(48, 26, id(bluetooth_on_icon));
+        }
+        return;
+      }
+
       // Get sensor values (Y is baseline, so add font height)
       if (id(count_rate_cpm).has_state()) {
         float cpm = id(count_rate_cpm).state;
-        it.printf(30, 22, id(font_medium), "%.0f CPM", cpm);
+        it.printf(30, 22, id(font_medium_bold), "%.0f", cpm);
+        it.printf(30 + 36, 22, id(font_medium), " CPM");
       } else {
-        it.print(30, 22, id(font_medium), "-- CPM");
+        it.printf(30, 22, id(font_medium_bold), "--");
+        it.printf(30 + 36, 22, id(font_medium), " CPM");
       }
 
       if (id(dose_rate).has_state()) {
         float dose = id(dose_rate).state;
-        it.printf(30, 35, id(font_medium), "%.0f nSv/h", dose);
+        it.printf(30, 35, id(font_medium_bold), "%.0f", dose);
+        it.printf(30 + 36, 35, id(font_medium), " nSv/h");
       } else {
-        it.print(30, 35, id(font_medium), "-- nSv/h");
+        it.printf(30, 35, id(font_medium_bold), "--");
+        it.printf(30 + 36, 35, id(font_medium), " nSv/h");
       }
 
       // Show accumulated dose
       if (id(dose_accumulated).has_state()) {
-        it.printf(30, 47, id(font_medium), "%.3f uSv", id(dose_accumulated).state);
+        float dose_sum = id(dose_accumulated).state;
+        it.printf(30, 47, id(font_medium_bold), "%.3f", dose_sum);
+        it.printf(30 + 36, 47, id(font_medium), " uSv");
       } else {
-        it.printf(30, 47, id(font_medium), "-- uSv");
+        it.printf(30, 47, id(font_medium_bold), "--");
+        it.printf(30 + 36, 47, id(font_medium), " uSv");
       }
