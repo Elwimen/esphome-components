@@ -1,0 +1,200 @@
+esphome:
+  name: "radiacode-bridge"
+  friendly_name: RadiaCode BLE Bridge
+  on_boot:
+    priority: -100
+    then:
+      - lambda: |-
+          // Restore accumulated dose from global variable on boot
+          id(radiacode_device).set_accumulated_dose(id(stored_dose_nsv));
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+# I2C Bus for OLED display
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+
+# Enable logging
+logger:
+  level: INFO
+  logs:
+    radiacode_ble: INFO
+    ble_client: WARN
+
+# Enable Home Assistant API
+api:
+  encryption:
+    key: !secret radiacode_api_key
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret iot_ssid
+  password: !secret iot_password
+  fast_connect: true
+
+  ap:
+    ssid: "[EHAP] RadiaCode Bridge"
+    password: !secret device_password
+
+captive_portal:
+
+# Global variable to persist accumulated dose across reboots
+globals:
+  - id: stored_dose_nsv
+    type: float
+    restore_value: true
+    initial_value: '0.0'
+
+# ESP32 BLE Tracker
+esp32_ble_tracker:
+  scan_parameters:
+    interval: 1100ms
+    window: 1100ms
+    active: true
+
+# BLE Client for RadiaCode
+ble_client:
+  - mac_address: !secret radiacode_mac_address
+    id: radiacode_ble_client
+
+# Custom RadiaCode BLE Component
+radiacode_ble:
+  id: radiacode_device
+  ble_client_id: radiacode_ble_client
+
+# Sensors from RadiaCode
+sensor:
+  - platform: radiacode_ble
+    radiacode_ble_id: radiacode_device
+    dose_rate:
+      name: "RadiaCode Dose Rate"
+      id: dose_rate
+      icon: mdi:radioactive
+    count_rate:
+      name: "RadiaCode Count Rate"
+      id: count_rate
+      icon: mdi:counter
+    count_rate_cpm:
+      name: "RadiaCode Count Rate CPM"
+      id: count_rate_cpm
+      icon: mdi:counter
+    dose_accumulated:
+      name: "RadiaCode Dose Accumulated"
+      id: dose_accumulated
+      icon: mdi:radioactive
+      on_value:
+        - lambda: |-
+            // Save accumulated dose to global variable on each update
+            id(stored_dose_nsv) = id(radiacode_device).get_accumulated_dose();
+    temperature:
+      name: "RadiaCode Temperature"
+      id: temperature
+      icon: mdi:thermometer
+
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+
+  - platform: wifi_signal
+    name: "Signal"
+    update_interval: 60s
+
+# Binary sensor for presence
+binary_sensor:
+  - platform: ble_presence
+    mac_address: !secret radiacode_mac_address
+    name: "RadiaCode Present"
+
+# Buttons
+button:
+  - platform: restart
+    name: "Restart Bridge"
+
+  - platform: template
+    name: "Connect RadiaCode"
+    icon: mdi:bluetooth-connect
+    on_press:
+      - lambda: |-
+          id(radiacode_ble_client)->set_enabled(true);
+          id(radiacode_ble_client)->connect();
+
+  - platform: template
+    name: "Disconnect RadiaCode"
+    icon: mdi:bluetooth-off
+    on_press:
+      - lambda: |-
+          id(radiacode_ble_client)->set_enabled(false);
+          id(radiacode_ble_client)->disconnect();
+
+# Number input for setting accumulated dose
+number:
+  - platform: template
+    name: "Set Accumulated Dose"
+    id: set_accumulated_dose
+    icon: mdi:radioactive
+    unit_of_measurement: "µSv"
+    min_value: 0
+    max_value: 10000
+    step: 0.001
+    mode: box
+    optimistic: true
+    set_action:
+      - lambda: |-
+          // Convert µSv to nSv for internal storage
+          float dose_nsv = x * 1000.0f;
+          id(radiacode_device).set_accumulated_dose(dose_nsv);
+          id(stored_dose_nsv) = dose_nsv;
+
+# Web server
+web_server:
+  port: 80
+  version: 3
+  local: true
+
+# Font for display
+font:
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 8
+  - file: "gfonts://Roboto"
+    id: font_medium
+    size: 12
+
+# OLED Display (72x40, SH1106)
+display:
+  - platform: ssd1306_i2c
+    model: "SH1106_128X64"
+    address: 0x3C
+    update_interval: 1s
+    lambda: |-
+      // SH1106 with 72x40 display, screen starts at (30, 12)
+      it.fill(COLOR_OFF);
+
+      // Get sensor values (Y is baseline, so add font height)
+      if (id(count_rate_cpm).has_state()) {
+        float cpm = id(count_rate_cpm).state;
+        it.printf(30, 22, id(font_medium), "%.0f CPM", cpm);
+      } else {
+        it.print(30, 22, id(font_medium), "-- CPM");
+      }
+
+      if (id(dose_rate).has_state()) {
+        float dose = id(dose_rate).state;
+        it.printf(30, 35, id(font_medium), "%.0f nSv/h", dose);
+      } else {
+        it.print(30, 35, id(font_medium), "-- nSv/h");
+      }
+
+      // Show accumulated dose
+      if (id(dose_accumulated).has_state()) {
+        it.printf(30, 47, id(font_medium), "%.3f uSv", id(dose_accumulated).state);
+      } else {
+        it.printf(30, 47, id(font_medium), "-- uSv");
+      }
